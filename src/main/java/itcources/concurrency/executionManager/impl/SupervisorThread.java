@@ -1,5 +1,8 @@
 package itcources.concurrency.executionManager.impl;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
@@ -10,6 +13,7 @@ import java.util.concurrent.SynchronousQueue;
  * @author Nikita Konovalov
  */
 public class SupervisorThread extends Thread {
+    private static final Logger LOG = LoggerFactory.getLogger(SupervisorThread.class);
 
     private List<Thread> executors = new ArrayList<Thread>();
     private Runnable callback;
@@ -32,19 +36,24 @@ public class SupervisorThread extends Thread {
         this.poolSize = poolSize;
         this.taskCount = tasks.size();
         this.queue = new LinkedBlockingQueue<Runnable>();
+        LOG.info("Supervisor created.");
     }
 
     @Override
     public synchronized void run() {
+        LOG.info("Supervisor started.");
         for (Runnable task : tasks) {
             queue.add(task);
         }
+        LOG.debug("Tasks added to queue.");
         for (int i = 0; i < poolSize; i++) {
             ExecutorThread thread = new ExecutorThread(this);
             thread.setDaemon(true);
             thread.start();
+            LOG.trace("Executor started.");
             executors.add(thread);
         }
+        LOG.debug("Executors started.");
     }
 
     public int getCompletedTaskCount() {
@@ -69,6 +78,7 @@ public class SupervisorThread extends Thread {
 
     public synchronized void registerComplete() {
         completedTaskCount++;
+        LOG.debug("Task finished.");
         if (isFinished()) {
             runCallbackOnce();
         }
@@ -76,6 +86,7 @@ public class SupervisorThread extends Thread {
 
     public synchronized void registerFail() {
         failedTaskCount++;
+        LOG.debug("Task failed.");
         if (isFinished()) {
             runCallbackOnce();
         }
@@ -87,6 +98,7 @@ public class SupervisorThread extends Thread {
             queue.drainTo(pending);
             interruptedTaskCount = pending.size();
             interrupted = true;
+            LOG.debug("Execution interrupted.");
             if (isFinished()) {
                 runCallbackOnce();
             }
@@ -95,6 +107,7 @@ public class SupervisorThread extends Thread {
 
     private void runCallbackOnce() {
         if (!callbackCalled) {
+            LOG.info("Callback started");
             callback.run();
             shutdownExecutors(); // we dont need them anymore;
             callbackCalled = true;
@@ -105,5 +118,6 @@ public class SupervisorThread extends Thread {
         for (Thread executor : executors) {
             executor.interrupt();
         }
+        LOG.debug("Executors stopped.");
     }
 }
